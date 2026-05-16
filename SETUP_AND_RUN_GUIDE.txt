@@ -1,0 +1,398 @@
+================================================================================
+               YOUR GYM BUDDY — COMPLETE SETUP & RUN GUIDE
+================================================================================
+
+PROJECT STRUCTURE
+-----------------
+your_gym_buddy/
+  posture_analyzer.py       ← Python real-time camera + AI pose analysis
+  requirements.txt          ← Python dependencies
+  scripts/                  ← Model training scripts
+  data/                     ← Pose image dataset
+  models/                   ← Trained ML model files (generated after training)
+  .venv39/                  ← Python 3.9 virtual environment (create this)
+  gym_buddy/                ← Flutter mobile/desktop app
+    lib/                    ← Dart source code
+    pubspec.yaml            ← Flutter packages
+  web/                      ← Node.js web server (optional)
+
+
+================================================================================
+PART 1: SYSTEM REQUIREMENTS
+================================================================================
+
+macOS (Apple Silicon M1/M2/M3 or Intel)
+  Python  : 3.9.x  (MUST be 3.9 — MediaPipe does NOT work on Python 3.10+)
+  Flutter : 3.29.x or later  (SDK constraint: ^3.9.2 Dart)
+  Dart    : 3.9.2 or later
+  Xcode   : 15 or later  (for iOS / macOS builds)
+  Node.js : 18.x or later  (optional, for web server only)
+  CocoaPods: latest  (for iOS)
+
+Check your versions:
+  python3 --version         # need 3.9.x
+  flutter --version         # need 3.29+
+  dart --version
+  xcodebuild -version
+  node --version
+  pod --version
+
+
+================================================================================
+PART 2: PYTHON BACKEND SETUP
+================================================================================
+
+STEP 1 — Find Python 3.9 on your system
+-----------------------------------------
+  which python3              # shows active python3
+  /usr/bin/python3 --version # macOS ships with Python 3.9.6
+
+  If you don't have Python 3.9:
+    brew install python@3.9
+    # After install, use: /opt/homebrew/bin/python3.9
+
+STEP 2 — Create a Python 3.9 virtual environment
+--------------------------------------------------
+  cd /path/to/your_gym_buddy
+
+  # Using macOS system Python 3.9:
+  /usr/bin/python3 -m venv .venv39
+
+  # OR using Homebrew Python 3.9:
+  /opt/homebrew/bin/python3.9 -m venv .venv39
+
+STEP 3 — Activate the virtual environment
+------------------------------------------
+  source .venv39/bin/activate
+  # Prompt changes to: (.venv39) $
+
+STEP 4 — Install Python packages (exact versions)
+--------------------------------------------------
+  pip install --upgrade pip
+
+  pip install mediapipe==0.10.14
+  pip install opencv-python==4.10.0.84
+  pip install pandas==2.2.3
+  pip install scikit-learn==1.5.2
+  pip install numpy==1.26.4
+  pip install groq==0.11.0
+
+  *** CRITICAL: mediapipe MUST be version 0.10.14 ***
+  Versions 0.10.15 and above dropped the `mp.solutions` API.
+  Higher versions will give:
+    AttributeError: module 'mediapipe' has no attribute 'solutions'
+
+  Full pinned requirements to paste into pip:
+    mediapipe==0.10.14
+    opencv-python==4.10.0.84
+    pandas==2.2.3
+    scikit-learn==1.5.2
+    numpy==1.26.4
+    groq==0.11.0
+
+STEP 5 — Verify installation
+------------------------------
+  .venv39/bin/python -c "import mediapipe as mp; print(mp.solutions.pose)"
+  # Expected: <class 'mediapipe.python.solutions.pose.Pose'>
+
+STEP 6 — (Optional) Set Groq API key for AI feedback
+------------------------------------------------------
+  export GROQ_API_KEY="your_groq_api_key_here"
+  # Get free key at: https://console.groq.com
+
+
+================================================================================
+PART 3: TRAIN THE POSE CLASSIFICATION MODEL  (one-time setup)
+================================================================================
+
+The model must be trained before the analyzer can run.
+Trained files are saved to: models/pose_classifier.pkl  and  models/label_encoder.pkl
+
+STEP 1 — Extract landmark features from images
+------------------------------------------------
+  cd /path/to/your_gym_buddy
+  .venv39/bin/python -m scripts.extract_landmarks
+
+  This reads images from data/raw/ and writes data/processed/pose_data.csv
+  Expected: ~1000+ rows extracted
+
+STEP 2 — Train the Random Forest classifier
+---------------------------------------------
+  .venv39/bin/python -m scripts.train_classifier
+
+  Expected output:
+    Accuracy: ~0.95
+    Saved: models/pose_classifier.pkl
+    Saved: models/label_encoder.pkl
+
+  Supported pose classes (8 total):
+    downdog, goddess, plank, squat_bad_back,
+    squat_bad_heel, squat_good, tree, warrior2
+
+STEP 3 — Verify model files exist
+-----------------------------------
+  ls models/
+  # Should show: pose_classifier.pkl  label_encoder.pkl
+
+
+================================================================================
+PART 4: RUN THE PYTHON POSTURE ANALYZER
+================================================================================
+
+  cd /path/to/your_gym_buddy
+  .venv39/bin/python posture_analyzer.py
+
+  OR with venv activated:
+    source .venv39/bin/activate
+    python posture_analyzer.py
+
+  What it does:
+    - Opens your webcam via OpenCV
+    - Detects body landmarks using MediaPipe Pose
+    - Classifies your posture using the trained RandomForest model
+    - Displays overlay with pose label + confidence on camera feed
+    - Sends feedback text to Groq LLM (if GROQ_API_KEY is set)
+
+  Camera window controls:
+    Press Q  — quit / close window
+
+  macOS Camera Permission (required first time):
+    System Settings → Privacy & Security → Camera
+    → Enable access for Terminal (or your terminal app)
+    Restart Terminal after granting permission.
+
+  If the window closes immediately:
+    Camera permission is denied. Grant it as described above.
+
+
+================================================================================
+PART 5: FLUTTER APP SETUP
+================================================================================
+
+Flutter SDK version: 3.29.x or later
+Dart SDK constraint: ^3.9.2
+
+STEP 1 — Install Flutter
+--------------------------
+  # If not installed:
+  git clone https://github.com/flutter/flutter.git -b stable ~/flutter
+  export PATH="$PATH:$HOME/flutter/bin"
+
+  # Verify:
+  flutter doctor
+
+  # Fix any issues shown by flutter doctor before continuing.
+
+STEP 2 — Install CocoaPods (iOS)
+----------------------------------
+  sudo gem install cocoapods
+  # or
+  brew install cocoapods
+
+STEP 3 — Navigate to Flutter project
+--------------------------------------
+  cd /path/to/your_gym_buddy/gym_buddy
+
+STEP 4 — Install Flutter packages
+-----------------------------------
+  flutter pub get
+
+  Packages installed (from pubspec.yaml):
+
+  PACKAGE                 VERSION   PURPOSE
+  ----------------------  --------  ------------------------------------------
+  get                     ^4.7.2    GetX state management + navigation
+  dio                     ^5.9.0    HTTP REST client
+  web_socket_channel      ^3.0.3    WebSocket for real-time pose streaming
+  camera                  ^0.11.1   Camera access for live pose detection
+  permission_handler      ^11.4.0   Runtime permissions (camera, mic)
+  flutter_tts             ^4.2.3    Text-to-speech voice coaching
+  lottie                  ^3.3.1    Animated Lottie JSON assets
+  tflite_flutter          ^0.11.0   On-device TFLite model inference
+  cupertino_icons         ^1.0.8    iOS-style icons
+  flutter_lints           ^5.0.0    Lint rules (dev)
+
+STEP 5 — Configure API endpoint
+---------------------------------
+  Edit: gym_buddy/lib/core/config/app_config.dart
+
+  Change the baseUrl and wsUrl to point to your Python backend:
+    static const String baseUrl = 'http://localhost:8000';
+    static const String wsUrl  = 'ws://localhost:8000/ws/pose';
+
+  For physical device testing, replace 'localhost' with your Mac's
+  local IP address (e.g., 192.168.1.x):
+    static const String baseUrl = 'http://192.168.1.100:8000';
+
+STEP 6 — Platform permissions
+
+  Android (already configured in AndroidManifest.xml):
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+  iOS (already configured in ios/Runner/Info.plist):
+    NSCameraUsageDescription
+
+  macOS — add camera entitlement if running on macOS desktop:
+    Edit: macos/Runner/DebugProfile.entitlements AND
+          macos/Runner/Release.entitlements
+    Add:
+      <key>com.apple.security.device.camera</key>
+      <true/>
+
+
+================================================================================
+PART 6: RUN THE FLUTTER APP
+================================================================================
+
+List available devices:
+  flutter devices
+
+Run on macOS desktop:
+  flutter run -d macos
+
+Run on iOS Simulator:
+  open -a Simulator
+  flutter run -d ios
+
+Run on connected iPhone:
+  flutter run -d <device-id>
+
+Run on Android emulator:
+  flutter run -d android
+
+Build release APK (Android):
+  flutter build apk --release
+
+Build release IPA (iOS):
+  flutter build ipa --release
+
+
+================================================================================
+PART 7: RUNNING BOTH PYTHON + FLUTTER TOGETHER
+================================================================================
+
+Open two terminal windows / tabs:
+
+Terminal 1 — Python Analyzer:
+  cd /path/to/your_gym_buddy
+  source .venv39/bin/activate
+  python posture_analyzer.py
+
+Terminal 2 — Flutter App:
+  cd /path/to/your_gym_buddy/gym_buddy
+  flutter run -d macos
+
+The Flutter app communicates with the Python backend via:
+  REST  : http://localhost:8000
+  WS    : ws://localhost:8000/ws/pose
+
+
+================================================================================
+PART 8: OPTIONAL — WEB SERVER (Node.js)
+================================================================================
+
+  cd /path/to/your_gym_buddy/web/server
+  npm install
+  node index.js
+
+  Or with the client:
+  cd /path/to/your_gym_buddy/web/client
+  npm install
+  npm run dev
+
+
+================================================================================
+PART 9: QUICK REFERENCE — EXACT PACKAGE VERSIONS
+================================================================================
+
+PYTHON PACKAGES
+  mediapipe==0.10.14      ← MUST be this version (critical)
+  opencv-python==4.10.0.84
+  pandas==2.2.3
+  scikit-learn==1.5.2
+  numpy==1.26.4
+  groq==0.11.0
+
+FLUTTER / DART
+  Flutter SDK : 3.29.x (stable channel)
+  Dart SDK    : 3.9.2+
+  get                : ^4.7.2
+  dio                : ^5.9.0
+  web_socket_channel : ^3.0.3
+  camera             : ^0.11.1
+  permission_handler : ^11.4.0
+  flutter_tts        : ^4.2.3
+  lottie             : ^3.3.1
+  tflite_flutter     : ^0.11.0
+  cupertino_icons    : ^1.0.8
+
+
+================================================================================
+PART 10: TROUBLESHOOTING
+================================================================================
+
+PROBLEM: AttributeError: module 'mediapipe' has no attribute 'solutions'
+CAUSE  : Wrong Python version (3.10+) or mediapipe version (0.10.15+)
+FIX    : Use Python 3.9 + mediapipe==0.10.14
+  pip uninstall mediapipe
+  pip install mediapipe==0.10.14
+
+PROBLEM: Camera window opens and closes immediately
+CAUSE  : macOS camera permission not granted to Terminal
+FIX    : System Settings → Privacy & Security → Camera → enable Terminal
+
+PROBLEM: FileNotFoundError: models/pose_classifier.pkl not found
+CAUSE  : Model not trained yet
+FIX    : Run training steps (Part 3 above)
+
+PROBLEM: flutter pub get fails
+CAUSE  : Flutter SDK not in PATH or version mismatch
+FIX    : flutter upgrade  OR  flutter channel stable && flutter upgrade
+
+PROBLEM: CocoaPods error on iOS build
+CAUSE  : Pods not installed
+FIX    : cd ios && pod install
+
+PROBLEM: tflite_flutter build error on iOS/macOS
+CAUSE  : Missing TFLite native library
+FIX    : cd ios && pod install --repo-update
+
+PROBLEM: Camera not working in Flutter on iOS Simulator
+CAUSE  : Simulator does not support real camera
+FIX    : Use a physical device or macOS desktop target
+
+PROBLEM: GROQ_API_KEY not found
+CAUSE  : Environment variable not set
+FIX    : export GROQ_API_KEY="gsk_xxxxxxxxxxxx"
+         (Get key free at https://console.groq.com)
+
+
+================================================================================
+QUICK START CHEAT SHEET (copy-paste)
+================================================================================
+
+# --- Python Setup (one-time) ---
+cd /path/to/your_gym_buddy
+/usr/bin/python3 -m venv .venv39
+source .venv39/bin/activate
+pip install mediapipe==0.10.14 opencv-python==4.10.0.84 pandas==2.2.3 scikit-learn==1.5.2 numpy==1.26.4 groq==0.11.0
+
+# --- Train Model (one-time) ---
+.venv39/bin/python -m scripts.extract_landmarks
+.venv39/bin/python -m scripts.train_classifier
+
+# --- Run Python Analyzer ---
+.venv39/bin/python posture_analyzer.py
+
+# --- Flutter Setup (one-time) ---
+cd gym_buddy
+flutter pub get
+cd ios && pod install && cd ..
+
+# --- Run Flutter App ---
+flutter run -d macos
+
+================================================================================
+END OF GUIDE
+================================================================================
